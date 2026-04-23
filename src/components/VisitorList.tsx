@@ -31,8 +31,11 @@ export default function VisitorList({ entries, onPrint }: VisitorListProps) {
 
   const filteredEntries = entries.filter(entry => {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
-    if (filter === 'today') return entry.date === todayStr;
-    if (filter === 'upcoming') return entry.date > todayStr;
+    // Ensure accurate date comparison by trimming any potential whitespace
+    const entryDate = String(entry.date || '').trim();
+    
+    if (filter === 'today') return entryDate === todayStr;
+    if (filter === 'upcoming') return entryDate > todayStr;
     return true;
   }).sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
 
@@ -104,12 +107,12 @@ export default function VisitorList({ entries, onPrint }: VisitorListProps) {
                   <div className="text-[10px] text-slate-400">{entry.visitorOrg || '개인 방문'}</div>
                 </td>
                 <td className="py-4">
-                  {entry.hasVehicle ? (
+                  {entry.hasVehicle && entry.carNumber ? (
                     <span className="font-mono text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded">
                       {entry.carNumber}
                     </span>
                   ) : (
-                    <span className="text-slate-300 italic text-xs">도보</span>
+                    <span className="text-slate-300 text-xs">-</span>
                   )}
                 </td>
                 <td className="py-4 hidden md:table-cell text-slate-500 max-w-[200px] truncate">

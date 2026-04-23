@@ -8,8 +8,8 @@ import { generateDates, ReservationData } from './lib/dateUtils';
 import VisitorForm from './components/VisitorForm';
 import VisitorList, { VisitorEntry } from './components/VisitorList';
 import PrintTable from './components/PrintTable';
-import { sendToGoogleSheets } from './services/apiService';
-import { ShieldCheck, Plus, ListFilter, LayoutDashboard, Search, Settings, ExternalLink, X, CheckCircle, Printer } from 'lucide-react';
+import { sendToGoogleSheets, fetchFromGoogleSheets } from './services/apiService';
+import { ShieldCheck, Plus, ListFilter, LayoutDashboard, Search, Settings, ExternalLink, X, CheckCircle, Printer, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format, isToday } from 'date-fns';
 
@@ -21,29 +21,67 @@ export default function App() {
   const [apiUrl, setApiUrl] = useState(DEFAULT_API_URL);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
 
-  // Load from local storage on mount
+  // Initial load and sync
   useEffect(() => {
-    const savedEntries = localStorage.getItem('school_visitor_entries');
     const savedUrl = localStorage.getItem('google_sheets_api_url');
+    const effectiveUrl = savedUrl || DEFAULT_API_URL;
     
-    if (savedEntries) {
-      try {
-        setEntries(JSON.parse(savedEntries));
-      } catch (e) {
-        console.error('Failed to load entries', e);
-      }
-    }
-    
-    // Prioritize saved URL, otherwise use default
     if (savedUrl) {
       setApiUrl(savedUrl);
-    } else {
-      setApiUrl(DEFAULT_API_URL);
     }
+
+    const loadAndSync = async () => {
+      // 1. Load from cache first
+      const savedEntries = localStorage.getItem('school_visitor_entries');
+      if (savedEntries) {
+        try {
+          setEntries(JSON.parse(savedEntries));
+        } catch (e) {
+          console.error('Failed to load cached entries', e);
+        }
+      }
+
+      // 2. Immediately try to sync from Google Sheets
+      if (effectiveUrl) {
+        handleSync(effectiveUrl);
+      }
+    };
+
+    loadAndSync();
   }, []);
+
+  const handleSync = async (urlToUse?: string) => {
+    const targetUrl = urlToUse || apiUrl;
+    if (!targetUrl) {
+      setSyncError('연동 주소가 설정되지 않았습니다.');
+      return;
+    }
+
+    setIsRefreshing(true);
+    setSyncError(null);
+    try {
+      const remoteEntries = await fetchFromGoogleSheets(targetUrl);
+      if (remoteEntries && Array.isArray(remoteEntries)) {
+        // If we got remote data, we update the whole list
+        setEntries(remoteEntries);
+        if (remoteEntries.length === 0) {
+          setSyncError('구글 시트가 비어있거나 데이터를 읽지 못했습니다.');
+        }
+      } else {
+        setSyncError('명단을 가져오는 데이터 형식이 올바르지 않습니다.');
+      }
+    } catch (error) {
+      console.error('Sync failed', error);
+      setSyncError('서버와의 네트워크 통신에 실패했습니다.');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const handleOpenSettings = () => {
     setIsPasswordModalOpen(true);
@@ -113,12 +151,16 @@ export default function App() {
       setIsSyncing(true);
       try {
         await sendToGoogleSheets(apiUrl, newEntries);
+        // Turn off heavy loader immediately after sending
+        setIsSyncing(false);
+        // Small delay before updating list to let Google Sheets settle
+        setTimeout(() => handleSync(), 500);
       } catch (error) {
         console.error('Background sync failed', error);
-        // We still keep the entries locally
-      } finally {
         setIsSyncing(false);
       }
+    } else {
+      setView('dashboard');
     }
     
     alert('방문자 예약이 완료되었습니다!');
@@ -232,12 +274,26 @@ export default function App() {
                 <div className="md:col-span-8 flex flex-col gap-6">
                   {/* List Card */}
                   <div className="bento-card flex-1">
+                      {syncError && (
+                        <div className="mb-4 p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-[11px] font-bold animate-in fade-in slide-in-from-top-1 flex items-center gap-2">
+                          <X className="w-3.5 h-3.5" />
+                          {syncError}
+                        </div>
+                      )}
                       <div className="flex justify-between items-center mb-6">
                         <div className="flex items-center gap-2">
                           <div className="w-2 h-6 bg-emerald-500 rounded-full"></div>
                           <h2 className="font-bold text-lg">오늘의 방문자 명단</h2>
                         </div>
                         <div className="flex items-center gap-4">
+                          <button 
+                            onClick={() => handleSync()}
+                            disabled={isRefreshing}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold transition-all hover:bg-slate-50 ${isRefreshing ? 'text-slate-300' : 'text-slate-600'}`}
+                          >
+                            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                            {isRefreshing ? '동기화 중...' : '명단 동기화'}
+                          </button>
                           <div className="relative hidden xl:block">
                             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                             <input
