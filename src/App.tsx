@@ -14,7 +14,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { format, isToday } from 'date-fns';
 
 export default function App() {
-  const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbzFkOIpl6JGXf0BsQvgIsb4K40Dpyi2Hx70CkPm2L21wF3Dthktp6vejAZRQaHiVWhP2Q/exec';
+  const DEFAULT_API_URL = 'https://script.google.com/macros/s/AKfycbzNEW_LXR2EmOibV1oULodeYgh6rColdiXH6yDHxsIZeP05vyddC5gCpKKEpDR4K_8BhQ/exec';
   const [entries, setEntries] = useState<VisitorEntry[]>([]);
   const [view, setView] = useState<'dashboard' | 'register'>('dashboard');
   const [searchTerm, setSearchTerm] = useState('');
